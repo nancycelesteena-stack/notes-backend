@@ -8,17 +8,36 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// --------------------- ROOT ROUTE ---------------------
+app.get("/", (req, res) => {
+  res.send("🚀 Notes API Running");
+});
+
 // --------------------- DATABASE ---------------------
-mongoose.connect("mongodb://127.0.0.1:27017/notesDB")
-  .then(() => console.log("MongoDB Connected"))
-  .catch(err => console.log(err));
+const MONGO_URI = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/notesDB";
+
+mongoose.connect(MONGO_URI)
+  .then(() => console.log("✅ MongoDB Connected"))
+  .catch(err => console.log("❌ MongoDB Error:", err));
 
 // --------------------- SCHEMA ---------------------
 const noteSchema = new mongoose.Schema({
-  title: String,
-  content: String,
-  favorite: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now }
+  title: {
+    type: String,
+    required: true
+  },
+  content: {
+    type: String,
+    required: true
+  },
+  favorite: {
+    type: Boolean,
+    default: false
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
 });
 
 const Note = mongoose.model("Note", noteSchema);
@@ -28,7 +47,7 @@ const Note = mongoose.model("Note", noteSchema);
 // GET ALL NOTES
 app.get("/notes", async (req, res) => {
   try {
-    const notes = await Note.find();
+    const notes = await Note.find().sort({ createdAt: -1 });
     res.json(notes);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -38,18 +57,17 @@ app.get("/notes", async (req, res) => {
 // ADD NOTE
 app.post("/add-note", async (req, res) => {
   try {
-    const note = new Note({
-      title: req.body.title,
-      content: req.body.content,
-      favorite: false,
-      createdAt: new Date()
-    });
+    const { title, content } = req.body;
 
+    if (!title || !content) {
+      return res.status(400).json({ message: "Title and content required" });
+    }
+
+    const note = new Note({ title, content });
     const savedNote = await note.save();
-    console.log("Saved Note:", savedNote); // debug
+
     res.json(savedNote);
   } catch (err) {
-    console.log(err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -67,12 +85,15 @@ app.delete("/delete-note/:id", async (req, res) => {
 // UPDATE NOTE
 app.put("/update-note/:id", async (req, res) => {
   try {
-    const note = await Note.findByIdAndUpdate(
+    const { title, content } = req.body;
+
+    const updatedNote = await Note.findByIdAndUpdate(
       req.params.id,
-      { title: req.body.title, content: req.body.content },
+      { title, content },
       { new: true }
     );
-    res.json({ message: "Note updated", note });
+
+    res.json(updatedNote);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -81,10 +102,15 @@ app.put("/update-note/:id", async (req, res) => {
 // TOGGLE FAVORITE
 app.put("/favorite-note/:id", async (req, res) => {
   try {
-    console.log("⭐ Favorite API hit");
     const note = await Note.findById(req.params.id);
+
+    if (!note) {
+      return res.status(404).json({ message: "Note not found" });
+    }
+
     note.favorite = !note.favorite;
     await note.save();
+
     res.json(note);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -92,7 +118,8 @@ app.put("/favorite-note/:id", async (req, res) => {
 });
 
 // --------------------- SERVER ---------------------
-const PORT = 5000;
+const PORT = process.env.PORT || 5000;
+
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("Server running on port 5000");
+  console.log(`🚀 Server running on port ${PORT}`);
 });
